@@ -248,16 +248,14 @@ def summarize_memo(memo_id: str):
         return jsonify({"error": str(e)}), 400
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 502
-    short_title = summary.replace("\n", " ").strip()
-    if len(short_title) > 80:
-        short_title = short_title[:77] + "..."
-    title = f"요약: {short_title}" if short_title else "요약 메모"
+    src_title = (src.title or "").strip()
+    title = f"[요약버전] {src_title}" if src_title else "[요약버전] (제목 없음)"
     new_m = store.create_memo(
         uid,
         title,
         summary,
         ["요약"],
-        None,
+        src.due_date if src.due_date else None,
     )
     return jsonify({"memo": _memo_to_json(new_m)}), 201
 
