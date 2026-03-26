@@ -29,12 +29,18 @@ def summarize_with_hf(full_text: str) -> str:
     if not token:
         raise ValueError("HF_TOKEN이 .env에 없습니다. Hugging Face 토큰을 설정하세요.")
 
-    url = f"https://router.huggingface.co/models/{model}"
+    url = f"https://router.huggingface.co/hf-inference/models/{model}"
     payload = full_text[:4000]
     r = requests.post(
         url,
         headers={"Authorization": f"Bearer {token}"},
-        json={"inputs": payload},
+    json={
+        "inputs": payload,
+        "parameters": {
+            "min_length": 50,
+            "max_length": 200,
+        }
+    },
         timeout=120,
     )
     if r.status_code == 503:
