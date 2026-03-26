@@ -1,0 +1,10 @@
+{
+  "name": "meca",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"cd back-end && venv\\Scripts\\python.exe app.py\" \"cd frontend && npm start\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

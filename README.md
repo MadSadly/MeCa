@@ -41,13 +41,29 @@ PowerShell에서 프로젝트 루트로 이동 후:
 - `back-end/.env`, `frontend/.env`가 없으면 `.env.example`을 복사합니다.
 - 요약 기능을 쓰려면 `back-end/.env`에 `HF_TOKEN`을 넣으세요.
 
-## 실행
+### CMD / 탐색기에서 (`.bat`)
+
+| 파일 | 설명 |
+|------|------|
+| `setup.bat` | 더블클릭 또는 `setup.bat` — `setup.ps1`과 동일하게 필수 설치 |
+| `run-dev.bat` | 한 터미널에서 API+웹 (`npm run dev`와 동일) |
+| `run-dev-two-windows.bat` | 백엔드·프론트를 **각각 새 PowerShell 창**으로 실행 (예전 방식) |
+
+`setup.bat`은 내부에서 PowerShell로 `setup.ps1`을 실행합니다. 실행 정책 때문에 막히면 PowerShell을 **관리자 권한 없이** 열고 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` 한 번만 허용해 두면 됩니다.
+
+## 실행 (한 터미널에서 API + 웹 동시)
 
 ```powershell
 .\run-dev.ps1
 ```
 
-백엔드·프론트가 각각 새 창에서 실행됩니다. 브라우저에서 `http://localhost:3000` 접속.
+또는 루트에서:
+
+```powershell
+npm run dev
+```
+
+종료할 때는 **Ctrl+C** 한 번으로 둘 다 같이 종료됩니다. 브라우저에서 `http://localhost:3000` 접속.
 
 ## 수동 실행
 
@@ -68,6 +84,10 @@ npm start
 
 ## Git 클론 후 동료가 할 일
 
-1. `.\setup.ps1`
-2. `.\run-dev.ps1`
+1. `.\setup.ps1` 또는 `setup.bat`
+2. `.\run-dev.ps1` / `run-dev.bat` / `npm run dev` (한 창) 또는 `run-dev-two-windows.bat` (두 창)
 3. LAN에서 접속 시 `frontend/.env`의 `REACT_APP_API_URL`을 서버 PC IP로 맞춤
+
+## 백그라운드로 떠 있는 서버 끄기
+
+예전에 터미널 없이 띄워 둔 `node` / `python`이 있으면 **작업 관리자**에서 해당 프로세스를 종료하거나, 해당 터미널에서 **Ctrl+C**로 끕니다. 포트 **3000**·**5000**이 이미 사용 중이면 새로 `run-dev`를 실행할 수 없습니다.
