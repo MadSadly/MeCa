@@ -32,4 +32,4 @@ if (-not (Test-Path (Join-Path $fe ".env"))) {
 }
 
 Set-Location $root
-Write-Host "완료. 실행은 .\run-dev.ps1" -ForegroundColor Green
+Write-Host "완료. 실행: .\run-dev.ps1 또는 run-dev.bat (한 터미널), run-dev-two-windows.bat (창 2개)" -ForegroundColor Green
