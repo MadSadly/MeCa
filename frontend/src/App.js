@@ -8,6 +8,8 @@ import MemoGrid from './components/MemoGrid';
 import MemoModal from './components/MemoModal';
 import SearchBar from './components/SearchBar';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import dayjs from 'dayjs';
+
 
 function App() {
   const [user, setUser] = useState(null);
@@ -64,9 +66,20 @@ function App() {
     setMemos([]);
   };
 
-  const openNewMemo = () => {
-    setMemoModal({ open: true, mode: 'create', memo: null });
+  const openNewMemo = (selectedDate) => {
+    setMemoModal({
+      open: true,
+      mode: 'create',
+      memo: {
+        title: '',
+        body: '',
+        due_date: dayjs(selectedDate).format('YYYY-MM-DD'), // 날짜 포맷팅
+        tags: []
+      }
+    });
   };
+
+
 
   const openEditMemo = (memo) => {
     setMemoModal({ open: true, mode: 'edit', memo });
@@ -122,7 +135,11 @@ function App() {
             {/* 2. 달력 주소 (전체 화면으로 캘린더 띄우기) */}
             <Route path="/calendar" element={
               <main className="main-area">
-                <CalendarPage memos={memos} />
+                <CalendarPage
+                    memos={memos}
+                    onOpenMemo={openEditMemo}   /* 수정용 */
+                    onAddMemo={openNewMemo}     /* 신규 작성용 */
+                />
               </main>
             } />
           </Routes>

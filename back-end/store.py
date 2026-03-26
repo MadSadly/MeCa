@@ -1,12 +1,13 @@
 """MariaDB(MySQL 호환) 저장소."""
 from __future__ import annotations
 
+import json
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
 import db as db_mod
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from models import Memo, User
@@ -113,6 +114,45 @@ def list_memos_for_user(user_id: str) -> list[MemoRecord]:
         return []
     s = _session()
     stmt = select(Memo).where(Memo.user_id == uid).order_by(Memo.updated_at.desc())
+    rows = s.scalars(stmt).all()
+    return [_memo_to_record(m) for m in rows]
+
+
+def query_memos_for_user(
+    user_id: str, q: str | None, tag: str | None
+) -> list[MemoRecord]:
+    """
+    q(제목/내용 검색)와 tag(태그 포함)를 MariaDB에서 바로 필터한 뒤 가져옵니다.
+    - tags_json 은 JSON 배열이므로 JSON_CONTAINS(tags_json, '"회의"') 형태로 검색합니다.
+    """
+    try:
+        uid = int(user_id)
+    except ValueError:
+        return []
+
+    ql = (q or "").strip().lower()
+    tl = (tag or "").strip()
+
+    s = _session()
+    stmt = select(Memo).where(Memo.user_id == uid)
+
+    if ql:
+        like_expr = f"%{ql}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Memo.title).like(like_expr),
+                func.lower(Memo.body).like(like_expr),
+            )
+        )
+
+    if tl:
+        # JSON_CONTAINS는 "JSON 문자열"을 원하므로 json.dumps 로 따옴표 포함 JSON literal 생성
+        # MariaDB에 저장된 tags_json 값이 unicode 이스케이프 형태로 들어가 있는 케이스가 있어
+        # ensure_ascii=True 로 동일 포맷을 맞춰 매칭합니다.
+        tag_json = json.dumps(tl, ensure_ascii=True)
+        stmt = stmt.where(func.JSON_CONTAINS(Memo.tags_json, tag_json) == 1)
+
+    stmt = stmt.order_by(Memo.updated_at.desc())
     rows = s.scalars(stmt).all()
     return [_memo_to_record(m) for m in rows]
 
