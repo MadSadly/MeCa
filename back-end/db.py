@@ -21,11 +21,12 @@ def get_database_url() -> str:
     url = (os.environ.get("DATABASE_URL") or "").strip()
     if url:
         return url
+    # Windows: localhost 대신 127.0.0.1 권장 (호스트가 DESKTOP-... 로 잡혀 root 인증 실패 방지)
     host = os.environ.get("MYSQL_HOST", "127.0.0.1")
     port = int(os.environ.get("MYSQL_PORT", "3306"))
     user = os.environ.get("MYSQL_USER", "root")
-    password = os.environ.get("MYSQL_PASSWORD", "5555")
-    database = os.environ.get("MYSQL_DATABASE", "MeCa")
+    password = os.environ.get("MYSQL_PASSWORD") or ""
+    database = os.environ.get("MYSQL_DATABASE", "memos")
     if not all([user, database]):
         raise RuntimeError(
             "DATABASE_URL 또는 MYSQL_USER, MYSQL_DATABASE 를 .env에 설정하세요."
@@ -48,7 +49,7 @@ def _ensure_mysql_database_exists() -> None:
     host = os.environ.get("MYSQL_HOST", "127.0.0.1")
     port = int(os.environ.get("MYSQL_PORT", "3306"))
     user = os.environ.get("MYSQL_USER", "")
-    password = os.environ.get("MYSQL_PASSWORD", "")
+    password = os.environ.get("MYSQL_PASSWORD") or ""
     if not user:
         return
     pw = password.replace("%", "%%")
@@ -94,11 +95,8 @@ def register_teardown(app) -> None:
         if SessionLocal is not None:
             SessionLocal.remove()
 
-"""MariaDB 사용자(회원) 저장. 비밀번호는 평문 저장(과제용 단순 구성)."""
-from __future__ import annotations
 
-import os
-
+# --- pymysql: users 테이블 (평문 비밀번호, 과제용) ---
 import pymysql
 from pymysql.cursors import DictCursor
 from pymysql.err import IntegrityError
@@ -115,10 +113,10 @@ __all__ = [
 
 def get_connection():
     return pymysql.connect(
-        host=os.environ.get("MYSQL_HOST", "localhost"),
+        host=os.environ.get("MYSQL_HOST", "127.0.0.1"),
         port=int(os.environ.get("MYSQL_PORT", "3306")),
         user=os.environ.get("MYSQL_USER", "root"),
-        password=os.environ.get("MYSQL_PASSWORD", ""),
+        password=os.environ.get("MYSQL_PASSWORD") or "",
         database=os.environ.get("MYSQL_DATABASE", "memos"),
         charset="utf8mb4",
         cursorclass=DictCursor,
@@ -129,13 +127,13 @@ def ensure_users_table() -> None:
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            # models.User 와 동일 컬럼 (SQLAlchemy create_all 과 호환)
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS users (
                   id INT AUTO_INCREMENT PRIMARY KEY,
-                  username VARCHAR(100) NOT NULL UNIQUE,
-                  password VARCHAR(255) NOT NULL,
-                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                  username VARCHAR(80) NOT NULL UNIQUE,
+                  password_hash VARCHAR(255) NOT NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """
             )
@@ -149,7 +147,7 @@ def create_user(username: str, password: str) -> int:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO users (username, password) VALUES (%s, %s)",
+                "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
                 (username, password),
             )
             conn.commit()
@@ -164,7 +162,7 @@ def get_user_by_id(user_id: int | str) -> dict | None:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, username, password FROM users WHERE id = %s",
+                "SELECT id, username, password_hash FROM users WHERE id = %s",
                 (uid,),
             )
             row = cur.fetchone()
@@ -178,7 +176,7 @@ def get_user_by_username(username: str) -> dict | None:
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, username, password FROM users WHERE username = %s",
+                "SELECT id, username, password_hash FROM users WHERE username = %s",
                 (username,),
             )
             row = cur.fetchone()
@@ -191,6 +189,6 @@ def verify_login(username: str, password: str) -> dict | None:
     row = get_user_by_username(username)
     if not row:
         return None
-    if row["password"] != password:
+    if row["password_hash"] != password:
         return None
     return row

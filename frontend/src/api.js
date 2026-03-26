@@ -1,20 +1,14 @@
-const API_BASE = (process.env.REACT_APP_API_URL || 'http://localhost:5000').replace(/\/$/, '');
-
-const TOKEN_KEY = 'memo_app_token';
-
-export function getToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
+// REACT_APP_API_URL 비우면 → 같은 출처(/api) + package.json proxy → Flask. 세션 쿠키 전달에 필요.
+// 기본을 http://localhost:5000 으로 두면 3000→5000 이 cross-site 가 되어 SameSite=Lax 쿠키가 fetch에 안 붙음.
+const raw = process.env.REACT_APP_API_URL;
+const API_BASE =
+  raw !== undefined && raw !== null && String(raw).trim() !== ''
+    ? String(raw).replace(/\/$/, '')
+    : '';
 
 export async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
-  const base = API_BASE || '';
-  const url = path.startsWith('http') ? path : `${base}${path}`;
+  const url = path.startsWith('http') ? path : `${API_BASE}${path}`;
   const res = await fetch(url, {
     ...options,
     headers,
