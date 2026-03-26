@@ -3,7 +3,7 @@ import Calendar from 'react-calendar';
 import dayjs from 'dayjs';
 import 'react-calendar/dist/Calendar.css';
 
-export default function CalendarOverviewModal({ open, memos, onClose }) {
+export default function CalendarPage({ open, memos, onClose }) {
   const [value, setValue] = useState(new Date());
 
   const byDate = useMemo(() => {
