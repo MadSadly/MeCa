@@ -159,8 +159,8 @@ def list_memos():
         return err
     q = request.args.get("q") or None
     tag = request.args.get("tag") or None
-    memos = store.list_memos_for_user(uid)
-    memos = store.filter_memos(memos, q, tag)
+    # DB에서 q/tag 를 바로 필터한 뒤 가져옵니다.
+    memos = store.query_memos_for_user(uid, q, tag)
     return jsonify({"memos": [_memo_to_json(m) for m in memos]})
 
 
