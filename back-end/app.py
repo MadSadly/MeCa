@@ -1,6 +1,7 @@
 import os
 import re
 import uuid
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, session
@@ -261,6 +262,8 @@ def summarize_memo(memo_id: str):
             body=summary,
             tags_json=["요약"],
             due_date=src.due_date if src.due_date else None,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         db.add(new_m)
         db.commit()
