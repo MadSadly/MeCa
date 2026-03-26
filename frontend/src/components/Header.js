@@ -9,11 +9,8 @@ export default function Header({
     <header className="app-header">
       <div className="header-inner">
         <div className="brand">
-          <span className="brand-icon" aria-hidden>
-            ☰
-          </span>
           <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <h1>Keep 메모</h1>
+            <h1>MEMOS</h1>
           </Link>
         </div>
 
@@ -32,10 +29,18 @@ export default function Header({
             </>
           ) : (
             <>
-              <button type="button" className="btn ghost" onClick={() => onLoginClick('login')}>
+              <button
+                type="button"
+                className="btn ghost auth-login-btn"
+                onClick={() => onLoginClick('login')}
+              >
                 로그인
               </button>
-              <button type="button" className="btn primary" onClick={() => onLoginClick('register')}>
+              <button
+                type="button"
+                className="btn primary auth-signup-btn"
+                onClick={() => onLoginClick('register')}
+              >
                 회원가입
               </button>
             </>

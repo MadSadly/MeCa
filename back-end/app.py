@@ -96,16 +96,19 @@ def register():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
+    full_name = (data.get("full_name") or "").strip()
+    email = (data.get("email") or "").strip()
+    phone = (data.get("phone") or "").strip()
     if len(username) < 2:
         return jsonify({"error": "사용자 이름은 2자 이상이어야 합니다."}), 400
     if len(password) < 4:
         return jsonify({"error": "비밀번호는 4자 이상이어야 합니다."}), 400
     try:
-        new_id = db.create_user(username, password)
+        new_id = db.create_user(username, password, full_name, email, phone)
     except db.IntegrityError:
         return jsonify({"error": "이미 존재하는 사용자입니다."}), 409
-    session["user_id"] = str(new_id)
-    return jsonify({"user": {"id": str(new_id), "username": username}})
+    # 회원가입 성공 시 자동 로그인하지 않음 (시연용 요구사항)
+    return jsonify({"ok": True, "user": {"id": str(new_id), "username": username}})
 
 
 @app.post("/api/auth/login")
