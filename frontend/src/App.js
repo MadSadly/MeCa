@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import './App.css';
-import { api, getToken, setToken } from './api';
+import { api } from './api';
 import AuthModal from './components/AuthModal';
 import CalendarOverviewModal from './components/CalendarOverviewModal';
 import Header from './components/Header';
@@ -20,7 +20,7 @@ function App() {
   const [booting, setBooting] = useState(true);
 
   const loadMemos = useCallback(async () => {
-    if (!getToken()) {
+    if (!user) {
       setMemos([]);
       return;
     }
@@ -30,23 +30,16 @@ function App() {
     const qs = params.toString();
     const data = await api(`/api/memos${qs ? `?${qs}` : ''}`);
     setMemos(data.memos || []);
-  }, [q, tag]);
+  }, [q, tag, user]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const t = getToken();
-      if (!t) {
-        setUser(null);
-        setBooting(false);
-        return;
-      }
       try {
         const data = await api('/api/auth/me');
         if (!cancelled) setUser(data.user);
       } catch {
-        setToken(null);
-        setUser(null);
+        if (!cancelled) setUser(null);
       } finally {
         if (!cancelled) setBooting(false);
       }
@@ -61,8 +54,12 @@ function App() {
     loadMemos().catch(() => setMemos([]));
   }, [user, loadMemos]);
 
-  const logout = () => {
-    setToken(null);
+  const logout = async () => {
+    try {
+      await api('/api/auth/logout', { method: 'POST' });
+    } catch {
+      /* ignore */
+    }
     setUser(null);
     setMemos([]);
   };

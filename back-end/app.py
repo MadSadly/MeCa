@@ -1,32 +1,36 @@
 import os
-from datetime import datetime, timedelta, timezone
+import re
 
-import jwt
-from jwt.exceptions import PyJWTError
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, session
 from flask_cors import CORS
-from werkzeug.security import check_password_hash, generate_password_hash
 
+import db
 from hf_client import summarize_with_hf
 import store
 
 load_dotenv()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-me")
-JWT_ALG = "HS256"
-JWT_EXP_DAYS = 7
 
 HOST = os.environ.get("FLASK_HOST", "0.0.0.0")
 PORT = int(os.environ.get("FLASK_PORT", "5000"))
+
+_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    re.compile(r"http://192\.168\.\d+\.\d+:3000"),
+]
 
 
 def create_app() -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = SECRET_KEY
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     CORS(
         app,
-        resources={r"/api/*": {"origins": "*"}},
+        resources={r"/api/*": {"origins": _CORS_ORIGINS}},
         supports_credentials=True,
     )
     return app
@@ -34,40 +38,18 @@ def create_app() -> Flask:
 
 app = create_app()
 
-
-def _token_from_request() -> str | None:
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer "):
-        return auth[7:].strip()
-    return None
-
-
-def _decode_user_id(token: str) -> str | None:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[JWT_ALG])
-        uid = payload.get("sub")
-        return str(uid) if uid is not None else None
-    except PyJWTError:
-        return None
+db.ensure_users_table()
 
 
 def require_user() -> tuple[str | None, tuple | None]:
-    tok = _token_from_request()
-    if not tok:
+    uid = session.get("user_id")
+    if not uid:
         return None, (jsonify({"error": "로그인이 필요합니다."}), 401)
-    uid = _decode_user_id(tok)
-    if not uid or not store.get_user_by_id(uid):
-        return None, (jsonify({"error": "유효하지 않은 토큰입니다."}), 401)
-    return uid, None
-
-
-def issue_token(user_id: str) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(days=JWT_EXP_DAYS)
-    return jwt.encode(
-        {"sub": user_id, "exp": exp},
-        SECRET_KEY,
-        algorithm=JWT_ALG,
-    )
+    u = db.get_user_by_id(uid)
+    if not u:
+        session.pop("user_id", None)
+        return None, (jsonify({"error": "세션이 유효하지 않습니다."}), 401)
+    return str(u["id"]), None
 
 
 @app.get("/api/health")
@@ -84,17 +66,12 @@ def register():
         return jsonify({"error": "사용자 이름은 2자 이상이어야 합니다."}), 400
     if len(password) < 4:
         return jsonify({"error": "비밀번호는 4자 이상이어야 합니다."}), 400
-    if store.get_user_by_username(username):
+    try:
+        new_id = db.create_user(username, password)
+    except db.IntegrityError:
         return jsonify({"error": "이미 존재하는 사용자입니다."}), 409
-    h = generate_password_hash(password)
-    user = store.create_user(username, h)
-    token = issue_token(user.id)
-    return jsonify(
-        {
-            "token": token,
-            "user": {"id": user.id, "username": user.username},
-        }
-    )
+    session["user_id"] = str(new_id)
+    return jsonify({"user": {"id": str(new_id), "username": username}})
 
 
 @app.post("/api/auth/login")
@@ -102,16 +79,19 @@ def login():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
-    user = store.get_user_by_username(username)
-    if not user or not check_password_hash(user.password_hash, password):
+    row = db.verify_login(username, password)
+    if not row:
         return jsonify({"error": "아이디 또는 비밀번호가 올바르지 않습니다."}), 401
-    token = issue_token(user.id)
+    session["user_id"] = str(row["id"])
     return jsonify(
-        {
-            "token": token,
-            "user": {"id": user.id, "username": user.username},
-        }
+        {"user": {"id": str(row["id"]), "username": row["username"]}}
     )
+
+
+@app.post("/api/auth/logout")
+def logout():
+    session.pop("user_id", None)
+    return jsonify({"ok": True})
 
 
 @app.get("/api/auth/me")
@@ -119,8 +99,11 @@ def me():
     uid, err = require_user()
     if err:
         return err
-    user = store.get_user_by_id(uid)
-    return jsonify({"user": {"id": user.id, "username": user.username}})
+    user = db.get_user_by_id(uid)
+    assert user
+    return jsonify(
+        {"user": {"id": str(user["id"]), "username": user["username"]}}
+    )
 
 
 def _memo_to_json(m: store.MemoRecord) -> dict:

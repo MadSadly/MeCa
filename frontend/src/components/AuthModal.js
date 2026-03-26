@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, setToken } from '../api';
+import { api } from '../api';
 
 export default function AuthModal({ open, initialMode = 'login', onClose, onLoggedIn }) {
   const [mode, setMode] = useState(initialMode);
@@ -23,7 +23,6 @@ export default function AuthModal({ open, initialMode = 'login', onClose, onLogg
         method: 'POST',
         body: JSON.stringify({ username, password }),
       });
-      setToken(data.token);
       onLoggedIn(data.user);
       onClose();
       setUsername('');
