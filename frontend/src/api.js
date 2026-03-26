@@ -13,9 +13,13 @@ export function setToken(token) {
 
 export async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
-  const t = getToken();
-  if (t) headers.Authorization = `Bearer ${t}`;
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const base = API_BASE || '';
+  const url = path.startsWith('http') ? path : `${base}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
   const text = await res.text();
   let data = null;
   try {
