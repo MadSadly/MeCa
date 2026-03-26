@@ -6,7 +6,6 @@ from flask import Flask, jsonify, request, session
 from flask_cors import CORS
 
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 
 import db as db_mod
 from db import init_db, register_teardown
@@ -105,15 +104,8 @@ def register():
         new_id = db.create_user(username, password)
     except db.IntegrityError:
         return jsonify({"error": "이미 존재하는 사용자입니다."}), 409
-    h = generate_password_hash(password)
-    user = store.create_user(username, h)
-    token = issue_token(user.id)
-    return jsonify(
-        {
-            "token": token,
-            "user": {"id": user.id, "username": user.username},
-        }
-    )
+    session["user_id"] = str(new_id)
+    return jsonify({"user": {"id": str(new_id), "username": username}})
 
 
 @app.post("/api/auth/login")
