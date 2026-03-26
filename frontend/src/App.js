@@ -112,11 +112,11 @@ function App() {
           <Routes>
             {/* 1. 기본 주소 (메인 메모장 화면) */}
             <Route path="/" element={
-              <main className="main-area">
+              <main className={`main-area ${!user ? 'guest-main' : ''}`}>
                 {!user ? (
-                    <p className="muted center-pad">
-                      로그인하면 메모를 작성할 수 있습니다. 우측 상단에서 로그인 또는 회원가입을 해 주세요.
-                    </p>
+                  <section className="welcome-image-wrap" aria-label="메모 서비스 소개 이미지">
+                    <img src="/welcome-hero.png" alt="메모 일정 관리 소개" className="welcome-image" />
+                  </section>
                 ) : (
                     <>
                       <SearchBar

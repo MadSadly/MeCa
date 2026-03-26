@@ -133,22 +133,44 @@ def ensure_users_table() -> None:
                 CREATE TABLE IF NOT EXISTS users (
                   id INT AUTO_INCREMENT PRIMARY KEY,
                   username VARCHAR(80) NOT NULL UNIQUE,
-                  password_hash VARCHAR(255) NOT NULL
+                  password_hash VARCHAR(255) NOT NULL,
+                  full_name VARCHAR(100) NULL,
+                  email VARCHAR(120) NULL,
+                  phone VARCHAR(30) NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
                 """
             )
+            # 기존 users 테이블(구버전)에 컬럼이 없을 수 있어 보강
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(100) NULL")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(120) NULL")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30) NULL")
         conn.commit()
     finally:
         conn.close()
 
 
-def create_user(username: str, password: str) -> int:
+def create_user(
+    username: str,
+    password: str,
+    full_name: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+) -> int:
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO users (username, password_hash) VALUES (%s, %s)",
-                (username, password),
+                """
+                INSERT INTO users (username, password_hash, full_name, email, phone)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    username,
+                    password,
+                    (full_name or "").strip() or None,
+                    (email or "").strip() or None,
+                    (phone or "").strip() or None,
+                ),
             )
             conn.commit()
             return int(cur.lastrowid)

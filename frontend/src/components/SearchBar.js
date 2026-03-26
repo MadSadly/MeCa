@@ -19,7 +19,7 @@ export default function SearchBar({ q, tag, onQChange, onTagChange, disabled }) 
       >
         {TAG_OPTIONS.map((t) => (
           <option key={t || 'all'} value={t}>
-            {t ? `태그: ${t}` : '모든 태그'}
+            {t || '모든 태그'}
           </option>
         ))}
       </select>
