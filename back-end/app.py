@@ -8,6 +8,11 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+
+import db as db_mod
+from db import init_db, register_teardown
 from hf_client import summarize_with_hf
 import store
 
@@ -29,6 +34,8 @@ def create_app() -> Flask:
         resources={r"/api/*": {"origins": "*"}},
         supports_credentials=True,
     )
+    init_db()
+    register_teardown(app)
     return app
 
 
@@ -75,6 +82,34 @@ def health():
     return jsonify({"ok": True})
 
 
+@app.get("/api/health/db")
+def health_db():
+    """MariaDB 연결·쿼리 가능 여부 확인 (브라우저·curl 로 호출)."""
+    try:
+        init_db()
+        s = db_mod.SessionLocal()
+        try:
+            ping = s.execute(text("SELECT 1")).scalar()
+            n_tables = s.execute(
+                text(
+                    "SELECT COUNT(*) FROM information_schema.tables "
+                    "WHERE table_schema = DATABASE()"
+                )
+            ).scalar()
+            return jsonify(
+                {
+                    "ok": True,
+                    "database": "connected",
+                    "select_1": int(ping),
+                    "tables_in_current_db": int(n_tables or 0),
+                }
+            )
+        finally:
+            db_mod.SessionLocal.remove()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 503
+
+
 @app.post("/api/auth/register")
 def register():
     data = request.get_json(silent=True) or {}
@@ -87,7 +122,10 @@ def register():
     if store.get_user_by_username(username):
         return jsonify({"error": "이미 존재하는 사용자입니다."}), 409
     h = generate_password_hash(password)
-    user = store.create_user(username, h)
+    try:
+        user = store.create_user(username, h)
+    except IntegrityError:
+        return jsonify({"error": "이미 존재하는 사용자입니다."}), 409
     token = issue_token(user.id)
     return jsonify(
         {
