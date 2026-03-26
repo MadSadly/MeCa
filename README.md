@@ -9,6 +9,8 @@
 | 저장소 | JSON 파일 (`back-end/data/store.json`) — 추후 DB로 교체 가능 |
 | 요약 | Hugging Face Inference API (`HF_TOKEN` 필요) |
 
+상세 다이어그램·LAN·DB 전환 계획은 [`ARCHITECTURE.md`](./ARCHITECTURE.md) 참고.
+
 ### API 개요
 
 - `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me`
