@@ -29,7 +29,7 @@ def summarize_with_hf(full_text: str) -> str:
     if not token:
         raise ValueError("HF_TOKEN이 .env에 없습니다. Hugging Face 토큰을 설정하세요.")
 
-    url = f"https://api-inference.huggingface.co/models/{model}"
+    url = f"https://router.huggingface.co/models/{model}"
     payload = full_text[:4000]
     r = requests.post(
         url,
