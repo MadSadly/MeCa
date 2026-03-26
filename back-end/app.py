@@ -1,5 +1,6 @@
 import os
 import re
+import uuid
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, session
@@ -11,6 +12,7 @@ import db as db_mod
 from db import init_db, register_teardown
 import db
 from hf_client import summarize_with_hf
+from models import Memo
 import store
 
 load_dotenv()
@@ -236,28 +238,44 @@ def summarize_memo(memo_id: str):
     uid, err = require_user()
     if err:
         return err
-    src = store.get_memo(uid, memo_id)
-    if not src:
-        return jsonify({"error": "메모를 찾을 수 없습니다."}), 404
-    combined = f"{src.title}\n\n{src.body}".strip()
-    if not combined:
-        return jsonify({"error": "요약할 내용이 없습니다."}), 400
+    db = db_mod.SessionLocal()
     try:
-        summary = summarize_with_hf(combined)
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 502
-    src_title = (src.title or "").strip()
-    title = f"[요약버전] {src_title}" if src_title else "[요약버전] (제목 없음)"
-    new_m = store.create_memo(
-        uid,
-        title,
-        summary,
-        ["요약"],
-        src.due_date if src.due_date else None,
-    )
-    return jsonify({"memo": _memo_to_json(new_m)}), 201
+        src = db.query(Memo).filter(Memo.id == memo_id, Memo.user_id == uid).first()
+        if not src:
+            return jsonify({"error": "메모를 찾을 수 없습니다."}), 404
+        combined = f"{src.title}\n\n{src.body}".strip()
+        if not combined:
+            return jsonify({"error": "요약할 내용이 없습니다."}), 400
+        try:
+            summary = summarize_with_hf(combined)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 502
+        src_title = (src.title or "").strip()
+        title = f"[요약버전] {src_title}" if src_title else "[요약버전] (제목 없음)"
+        new_m = Memo(
+            id=str(uuid.uuid4()),
+            user_id=uid,
+            title=title,
+            body=summary,
+            tags_json=["요약"],
+            due_date=src.due_date if src.due_date else None,
+        )
+        db.add(new_m)
+        db.commit()
+        db.refresh(new_m)
+        return jsonify({"memo": {
+            "id": new_m.id,
+            "title": new_m.title,
+            "body": new_m.body,
+            "tags": new_m.tags_json,
+            "due_date": str(new_m.due_date) if new_m.due_date else None,
+            "created_at": new_m.created_at.isoformat() if new_m.created_at else None,
+            "updated_at": new_m.updated_at.isoformat() if new_m.updated_at else None,
+        }}), 201
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
