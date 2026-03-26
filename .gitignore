@@ -10,3 +10,6 @@ back-end/data/
 frontend/build/
 frontend/.git/
 back-end/.git/
+# IntelliJ IDEA
+.idea/
+*.iml
