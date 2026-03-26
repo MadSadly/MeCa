@@ -3,6 +3,7 @@ import Calendar from 'react-calendar';
 import dayjs from 'dayjs';
 import { api } from '../api';
 import 'react-calendar/dist/Calendar.css';
+import Toast from './Toast';
 
 const PRESET_TAGS = ['일정', '회의', '업무', '개인', '아이디어', '중요'];
 
@@ -28,13 +29,15 @@ export default function MemoModal({
   const [calOpen, setCalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sumLoading, setSumLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [sumConfirm, setSumConfirm] = useState(false);
+  const [toastMsg, setToastMsg] = useState('');
+  const [toastType, setToastType] = useState('success');
+  const [toastVisible, setToastVisible] = useState(false);
 
   const memoId = initialMemo?.id;
 
   useEffect(() => {
     if (!open) return;
-    setError('');
     if (mode === 'edit' && initialMemo) {
       setTitle(initialMemo.title || '');
       setBody(initialMemo.body || '');
@@ -59,7 +62,6 @@ export default function MemoModal({
     );
 
   const persist = async () => {
-    setError('');
     if (mode === 'create' && !hasMeaningfulContent()) {
       return;
     }
@@ -85,7 +87,6 @@ export default function MemoModal({
         onSaved?.(data.memo);
       }
     } catch (e) {
-      setError(e.data?.error || e.message);
       throw e;
     } finally {
       setSaving(false);
@@ -108,28 +109,36 @@ export default function MemoModal({
 
   const handleSaveClick = async () => {
     if (mode === 'create' && !hasMeaningfulContent()) {
-      setError('제목·내용·태그·일정 중 하나 이상 입력해 주세요.');
+      setToastMsg('제목·내용·태그·일정 중 하나 이상 입력해 주세요.');
+      setToastType('error');
+      setToastVisible(true);
       return;
     }
     try {
       await persist();
       onClose();
     } catch {
-      /* error shown */
+      setToastMsg('저장에 실패했습니다. 다시 시도해 주세요.');
+      setToastType('error');
+      setToastVisible(true);
     }
   };
 
   const handleSummarize = async () => {
     if (!memoId) return;
     setSumLoading(true);
-    setError('');
     try {
       await persist();
       const data = await api(`/api/memos/${memoId}/summarize`, { method: 'POST' });
+      setToastMsg('요약 메모가 생성되었습니다!');
+      setToastType('success');
+      setToastVisible(true);
       onSaved?.(data.memo);
       onClose();
     } catch (e) {
-      setError(e.data?.error || e.message);
+      setToastMsg('요약에 실패했습니다. 다시 시도해 주세요.');
+      setToastType('error');
+      setToastVisible(true);
     } finally {
       setSumLoading(false);
     }
@@ -139,13 +148,14 @@ export default function MemoModal({
     if (!memoId) return;
     if (!window.confirm('이 메모를 삭제할까요?')) return;
     setSaving(true);
-    setError('');
     try {
       await api(`/api/memos/${memoId}`, { method: 'DELETE' });
       onDeleted?.();
       onClose();
     } catch (e) {
-      setError(e.data?.error || e.message);
+      setToastMsg('삭제에 실패했습니다. 다시 시도해 주세요.');
+      setToastType('error');
+      setToastVisible(true);
     } finally {
       setSaving(false);
     }
@@ -202,14 +212,14 @@ export default function MemoModal({
             )}
           </div>
 
-          {error && <p className="form-error">{error}</p>}
+          {/* (해당 에러 인라인 표시 제거) */}
 
           <div className="modal-actions">
-            {mode === 'edit' && memoId && (
+            {mode === 'edit' && memoId && !tags.includes('요약') && (
               <button
                 type="button"
                 className="btn accent"
-                onClick={handleSummarize}
+                onClick={() => setSumConfirm(true)}
                 disabled={sumLoading || saving}
               >
                 {sumLoading ? '요약 중…' : '요약 (새 메모)'}
@@ -229,6 +239,37 @@ export default function MemoModal({
           </div>
         </div>
       </div>
+
+      {sumConfirm && (
+        <div
+          className="modal-backdrop nested"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setSumConfirm(false);
+          }}
+        >
+          <div className="modal confirm-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <h3>요약본을 새 메모로 생성할까요?</h3>
+
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn accent"
+                onClick={async () => {
+                  setSumConfirm(false);
+                  await handleSummarize();
+                }}
+                disabled={sumLoading || saving}
+              >
+                예
+              </button>
+              <button type="button" className="btn ghost" onClick={() => setSumConfirm(false)} disabled={sumLoading || saving}>
+                아니요
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {calOpen && (
         <div
@@ -255,6 +296,8 @@ export default function MemoModal({
           </div>
         </div>
       )}
+
+      <Toast message={toastMsg} type={toastType} visible={toastVisible} />
     </>
   );
 }
