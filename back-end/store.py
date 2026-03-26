@@ -1,22 +1,27 @@
-"""JSON 파일 기반 저장소 (추후 DB로 교체 가능)."""
+"""MariaDB(MySQL 호환) 저장소."""
 from __future__ import annotations
 
-import json
-import threading
 import uuid
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 
-_lock = threading.Lock()
+import db as db_mod
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
-DATA_FILE = DATA_DIR / "store.json"
+from models import Memo, User
+
+_UNSET = object()
 
 
-def _utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def _session():
+    """init_db 이후의 SessionLocal 을 쓴다. `from db import SessionLocal` 캐시(None) 버그 방지."""
+    db_mod.init_db()
+    return db_mod.SessionLocal()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 @dataclass
@@ -38,78 +43,90 @@ class MemoRecord:
     updated_at: str
 
 
-def _default_state() -> dict[str, Any]:
-    return {"users": [], "memos": [], "next_user_num": 1}
+def _user_to_record(u: User) -> UserRecord:
+    return UserRecord(
+        id=str(u.id),
+        username=u.username,
+        password_hash=u.password_hash,
+    )
 
 
-def _load_raw() -> dict[str, Any]:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if not DATA_FILE.exists():
-        state = _default_state()
-        _save_raw(state)
-        return state
-    with open(DATA_FILE, encoding="utf-8") as f:
-        return json.load(f)
+def _memo_to_record(m: Memo) -> MemoRecord:
+    tags = m.tags_json
+    if not isinstance(tags, list):
+        tags = []
+    tags = [str(t) for t in tags]
+    return MemoRecord(
+        id=m.id,
+        user_id=str(m.user_id),
+        title=m.title or "",
+        body=m.body or "",
+        tags=tags,
+        due_date=m.due_date.isoformat() if m.due_date else None,
+        created_at=m.created_at.isoformat(),
+        updated_at=m.updated_at.isoformat(),
+    )
 
 
-def _save_raw(state: dict[str, Any]) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = DATA_FILE.with_suffix(".tmp")
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
-    tmp.replace(DATA_FILE)
-
-
-def list_users() -> list[UserRecord]:
-    with _lock:
-        raw = _load_raw()
-    return [UserRecord(**u) for u in raw["users"]]
+def _parse_due(due: str | None) -> date | None:
+    if not due:
+        return None
+    try:
+        return date.fromisoformat(due[:10])
+    except ValueError:
+        return None
 
 
 def get_user_by_username(username: str) -> UserRecord | None:
-    for u in list_users():
-        if u.username == username:
-            return u
-    return None
+    s = _session()
+    u = s.scalar(select(User).where(User.username == username))
+    return _user_to_record(u) if u else None
 
 
 def get_user_by_id(user_id: str) -> UserRecord | None:
-    for u in list_users():
-        if u.id == user_id:
-            return u
-    return None
+    try:
+        uid = int(user_id)
+    except ValueError:
+        return None
+    s = _session()
+    u = s.get(User, uid)
+    return _user_to_record(u) if u else None
 
 
 def create_user(username: str, password_hash: str) -> UserRecord:
-    with _lock:
-        raw = _load_raw()
-        num = raw["next_user_num"]
-        uid = str(num)
-        raw["next_user_num"] = num + 1
-        rec = UserRecord(id=uid, username=username, password_hash=password_hash)
-        raw["users"].append(asdict(rec))
-        _save_raw(raw)
-    return rec
+    s = _session()
+    u = User(username=username, password_hash=password_hash)
+    s.add(u)
+    try:
+        s.commit()
+    except IntegrityError:
+        s.rollback()
+        raise
+    s.refresh(u)
+    return _user_to_record(u)
 
 
 def list_memos_for_user(user_id: str) -> list[MemoRecord]:
-    with _lock:
-        raw = _load_raw()
-    out = []
-    for m in raw["memos"]:
-        if m["user_id"] == user_id:
-            out.append(MemoRecord(**m))
-    out.sort(key=lambda x: x.updated_at, reverse=True)
-    return out
+    try:
+        uid = int(user_id)
+    except ValueError:
+        return []
+    s = _session()
+    stmt = select(Memo).where(Memo.user_id == uid).order_by(Memo.updated_at.desc())
+    rows = s.scalars(stmt).all()
+    return [_memo_to_record(m) for m in rows]
 
 
 def get_memo(user_id: str, memo_id: str) -> MemoRecord | None:
-    with _lock:
-        raw = _load_raw()
-    for m in raw["memos"]:
-        if m["user_id"] == user_id and m["id"] == memo_id:
-            return MemoRecord(**m)
-    return None
+    try:
+        uid = int(user_id)
+    except ValueError:
+        return None
+    s = _session()
+    m = s.get(Memo, memo_id)
+    if not m or m.user_id != uid:
+        return None
+    return _memo_to_record(m)
 
 
 def create_memo(
@@ -119,26 +136,24 @@ def create_memo(
     tags: list[str],
     due_date: str | None,
 ) -> MemoRecord:
+    uid = int(user_id)
     now = _utc_now()
     mid = str(uuid.uuid4())
-    rec = MemoRecord(
+    m = Memo(
         id=mid,
-        user_id=user_id,
+        user_id=uid,
         title=title or "",
         body=body or "",
-        tags=tags or [],
-        due_date=due_date,
+        tags_json=list(tags or []),
+        due_date=_parse_due(due_date),
         created_at=now,
         updated_at=now,
     )
-    with _lock:
-        raw = _load_raw()
-        raw["memos"].append(asdict(rec))
-        _save_raw(raw)
-    return rec
-
-
-_UNSET = object()
+    s = _session()
+    s.add(m)
+    s.commit()
+    s.refresh(m)
+    return _memo_to_record(m)
 
 
 def update_memo(
@@ -150,41 +165,39 @@ def update_memo(
     tags: list[str] | None | object = _UNSET,
     due_date: str | None | object = _UNSET,
 ) -> MemoRecord | None:
-    with _lock:
-        raw = _load_raw()
-        found = None
-        for i, m in enumerate(raw["memos"]):
-            if m["user_id"] == user_id and m["id"] == memo_id:
-                found = i
-                break
-        if found is None:
-            return None
-        m = raw["memos"][found]
-        if title is not _UNSET:
-            m["title"] = title or ""
-        if body is not _UNSET:
-            m["body"] = body or ""
-        if tags is not _UNSET:
-            m["tags"] = tags or []
-        if due_date is not _UNSET:
-            m["due_date"] = due_date
-        m["updated_at"] = _utc_now()
-        _save_raw(raw)
-        return MemoRecord(**m)
+    try:
+        uid = int(user_id)
+    except ValueError:
+        return None
+    s = _session()
+    m = s.get(Memo, memo_id)
+    if not m or m.user_id != uid:
+        return None
+    if title is not _UNSET:
+        m.title = title or ""
+    if body is not _UNSET:
+        m.body = body or ""
+    if tags is not _UNSET:
+        m.tags_json = list(tags or [])
+    if due_date is not _UNSET:
+        m.due_date = _parse_due(due_date) if due_date else None
+    m.updated_at = _utc_now()
+    s.commit()
+    s.refresh(m)
+    return _memo_to_record(m)
 
 
 def delete_memo(user_id: str, memo_id: str) -> bool:
-    with _lock:
-        raw = _load_raw()
-        before = len(raw["memos"])
-        raw["memos"] = [
-            m
-            for m in raw["memos"]
-            if not (m["user_id"] == user_id and m["id"] == memo_id)
-        ]
-        if len(raw["memos"]) == before:
-            return False
-        _save_raw(raw)
+    try:
+        uid = int(user_id)
+    except ValueError:
+        return False
+    s = _session()
+    m = s.get(Memo, memo_id)
+    if not m or m.user_id != uid:
+        return False
+    s.delete(m)
+    s.commit()
     return True
 
 
@@ -205,3 +218,18 @@ def filter_memos(
         tl = tag.strip()
         out = [m for m in out if tl in (m.tags or [])]
     return out
+
+
+__all__ = [
+    "UserRecord",
+    "MemoRecord",
+    "get_user_by_username",
+    "get_user_by_id",
+    "create_user",
+    "list_memos_for_user",
+    "get_memo",
+    "create_memo",
+    "update_memo",
+    "delete_memo",
+    "filter_memos",
+]
