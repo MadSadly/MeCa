@@ -85,7 +85,7 @@ def summarize_with_hf(full_text: str) -> str:
         "inputs": payload,
         "parameters": {
             "min_length": 150,
-            "max_length": 300,
+            "max_length": 500,
         }
     },
         timeout=120,
