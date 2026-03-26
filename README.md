@@ -39,13 +39,19 @@ PowerShell에서 프로젝트 루트로 이동 후:
 - `back-end/.env`, `frontend/.env`가 없으면 `.env.example`을 복사합니다.
 - 요약 기능을 쓰려면 `back-end/.env`에 `HF_TOKEN`을 넣으세요.
 
-## 실행
+## 실행 (한 터미널에서 API + 웹 동시)
 
 ```powershell
 .\run-dev.ps1
 ```
 
-백엔드·프론트가 각각 새 창에서 실행됩니다. 브라우저에서 `http://localhost:3000` 접속.
+또는 루트에서:
+
+```powershell
+npm run dev
+```
+
+종료할 때는 **Ctrl+C** 한 번으로 둘 다 같이 종료됩니다. 브라우저에서 `http://localhost:3000` 접속.
 
 ## 수동 실행
 

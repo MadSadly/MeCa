@@ -17,6 +17,10 @@ $fe = Join-Path $root "frontend"
 Set-Location $fe
 npm install
 
+Write-Host "== 루트: 한 번에 실행용 (concurrently) ==" -ForegroundColor Cyan
+Set-Location $root
+npm install
+
 Write-Host "== 환경 파일 복사 (없을 때만) ==" -ForegroundColor Cyan
 if (-not (Test-Path (Join-Path $be ".env"))) {
     Copy-Item (Join-Path $be ".env.example") (Join-Path $be ".env")
