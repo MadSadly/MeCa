@@ -24,7 +24,7 @@ export default function Toast({ message, type = 'success', visible }) {
       aria-live="polite"
       style={{
         position: 'fixed',
-        left: '100%',
+        left: '50%',
         bottom: 24,
         transform: 'translateX(-50%)',
         zIndex: 9999,
