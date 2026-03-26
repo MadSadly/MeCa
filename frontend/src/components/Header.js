@@ -1,8 +1,9 @@
+import { Link } from 'react-router-dom';
+
 export default function Header({
   user,
   onLoginClick,
   onLogout,
-  onCalendarClick,
 }) {
   return (
     <header className="app-header">
@@ -11,13 +12,16 @@ export default function Header({
           <span className="brand-icon" aria-hidden>
             ☰
           </span>
+          <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
           <h1>Keep 메모</h1>
+          </Link>
         </div>
+
         <div className="header-actions">
           {user && (
-            <button type="button" className="btn ghost" onClick={onCalendarClick}>
-              캘린더
-            </button>
+              <Link to="/calendar" className="btn ghost" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center' }}>
+                캘린더
+              </Link>
           )}
           {user ? (
             <>

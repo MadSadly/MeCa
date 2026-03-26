@@ -7,6 +7,7 @@ import Header from './components/Header';
 import MemoGrid from './components/MemoGrid';
 import MemoModal from './components/MemoModal';
 import SearchBar from './components/SearchBar';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -16,7 +17,6 @@ function App() {
   const [q, setQ] = useState('');
   const [tag, setTag] = useState('');
   const [memoModal, setMemoModal] = useState({ open: false, mode: 'create', memo: null });
-  const [calOpen, setCalOpen] = useState(false);
   const [booting, setBooting] = useState(true);
 
   const loadMemos = useCallback(async () => {
